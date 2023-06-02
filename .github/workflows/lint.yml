@@ -27,11 +27,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install black ruff
 
-    - name: Lint with black
+    - name: Check formatting with black
       run: |
-        black --check --skip-string-normalization --line-length 120 rq tests
+        black --check --skip-string-normalization --line-length 120 src/rq tests
 
-    - name: Lint with ruff
+    - name: Check lint with ruff
       run: |
         # stop the build if there are Python syntax errors.
-        ruff check --show-source rq tests
+        ruff check --show-source src/rq tests

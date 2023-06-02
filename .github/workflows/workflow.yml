@@ -96,8 +96,14 @@ jobs:
           pip install dist/rq*whl
 
       - name: Test with pytest
+        env:
+          RUN_SLOW_TESTS_TOO: 1
         run: |
-          RUN_SLOW_TESTS_TOO=1 pytest --cov=rq --cov-config=.coveragerc --cov-report=xml --durations=5
+          pytest tests \
+            --cov=rq \
+            --cov-config=.coveragerc \
+            --cov-report=xml \
+            --durations=5
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
