@@ -101,7 +101,7 @@ jobs:
         env:
           RUN_SLOW_TESTS_TOO: 1
         run: |
-          pytest tests/test_callback.py \
+          pytest tests/test_callbacks.py \
             --cov=rq \
             --cov-config=.coveragerc \
             --cov-report=xml \
