@@ -1,9 +1,8 @@
-from redis import Redis
+from redis import ConnectionPool, Redis, SSLConnection, UnixDomainSocketConnection
 
-from rq import Connection, Queue, use_connection, get_current_connection, pop_connection
-from rq.connections import NoRedisConnectionException
-
-from tests import find_empty_redis_database, RQTestCase
+from rq import Connection, Queue
+from rq.connections import parse_connection
+from tests import RQTestCase, find_empty_redis_database
 from tests.fixtures import do_nothing
 
 
@@ -30,7 +29,7 @@ class TestConnectionInheritance(RQTestCase):
 
     def test_connection_pass_thru(self):
         """Connection passed through from queues to jobs."""
-        q1 = Queue()
+        q1 = Queue(connection=self.testconn)
         with Connection(new_connection()):
             q2 = Queue()
         job1 = q1.enqueue(do_nothing)
@@ -38,29 +37,15 @@ class TestConnectionInheritance(RQTestCase):
         self.assertEqual(q1.connection, job1.connection)
         self.assertEqual(q2.connection, job2.connection)
 
+    def test_parse_connection(self):
+        """Test parsing the connection"""
+        conn_class, pool_class, pool_kwargs = parse_connection(Redis(ssl=True))
+        self.assertEqual(conn_class, Redis)
+        self.assertEqual(pool_class, SSLConnection)
 
-class TestConnectionHelpers(RQTestCase):
-    def test_use_connection(self):
-        """Test function use_connection works as expected."""
-        conn = new_connection()
-        use_connection(conn)
-
-        self.assertEqual(conn, get_current_connection())
-
-        use_connection()
-
-        self.assertNotEqual(conn, get_current_connection())
-
-        use_connection(self.testconn)  # Restore RQTestCase connection
-
-        with self.assertRaises(AssertionError):
-            with Connection(new_connection()):
-                use_connection()
-                with Connection(new_connection()):
-                    use_connection()
-
-    def test_resolve_connection_raises_on_no_connection(self):
-        """Test function resolve_connection raises if there is no connection."""
-        pop_connection()
-        with self.assertRaises(NoRedisConnectionException):
-            Queue()
+        path = '/tmp/redis.sock'
+        pool = ConnectionPool(connection_class=UnixDomainSocketConnection, path=path)
+        conn_class, pool_class, pool_kwargs = parse_connection(Redis(connection_pool=pool))
+        self.assertEqual(conn_class, Redis)
+        self.assertEqual(pool_class, UnixDomainSocketConnection)
+        self.assertEqual(pool_kwargs, {"path": path})

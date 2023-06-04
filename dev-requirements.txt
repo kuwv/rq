@@ -1,7 +1,0 @@
-codecov
-psutil
-pytest
-pytest-cov
-sentry-sdk
-redis
-click

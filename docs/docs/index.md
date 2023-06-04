@@ -77,6 +77,7 @@ results are kept. Expired jobs will be automatically deleted. Defaults to 500 se
 * `description` to add additional description to enqueued jobs.
 * `on_success` allows you to run a function after a job completes successfully
 * `on_failure` allows you to run a function after a job fails
+* `on_stopped` allows you to run a function after a job is stopped
 * `args` and `kwargs`: use these to explicitly pass arguments and keyword to the
   underlying job function. This is useful if your function happens to have
   conflicting argument names with RQ, for example `description` or `ttl`.
@@ -111,8 +112,8 @@ You can also enqueue multiple jobs in bulk with `queue.enqueue_many()` and `Queu
 ```python
 jobs = q.enqueue_many(
   [
-    Queue.prepare_data(count_words_at_url, 'http://nvie.com', job_id='my_job_id'),
-    Queue.prepare_data(count_words_at_url, 'http://nvie.com', job_id='my_other_job_id'),
+    Queue.prepare_data(count_words_at_url, ('http://nvie.com',), job_id='my_job_id'),
+    Queue.prepare_data(count_words_at_url, ('http://nvie.com',), job_id='my_other_job_id'),
   ]
 )
 ```
@@ -123,16 +124,15 @@ which will enqueue all the jobs in a single redis `pipeline` which you can optio
 with q.connection.pipeline() as pipe:
   jobs = q.enqueue_many(
     [
-      Queue.prepare_data(count_words_at_url, 'http://nvie.com', job_id='my_job_id'),
-      Queue.prepare_data(count_words_at_url, 'http://nvie.com', job_id='my_other_job_id'),
+      Queue.prepare_data(count_words_at_url, ('http://nvie.com',), job_id='my_job_id'),
+      Queue.prepare_data(count_words_at_url, ('http://nvie.com',), job_id='my_other_job_id'),
     ],
     pipeline=pipe
   )
   pipe.execute()
 ```
 
-`Queue.prepare_data` accepts all arguments that `Queue.parse_args` does **EXCEPT** for `depends_on`,
-which is not supported at this time, so dependencies will be up to you to setup.
+`Queue.prepare_data` accepts all arguments that `Queue.parse_args` does.
 
 ## Job dependencies
 
@@ -195,12 +195,30 @@ job_2 = queue.enqueue(say_hello, depends_on=dependency)
 ## Job Callbacks
 _New in version 1.9.0._
 
-If you want to execute a function whenever a job completes or fails, RQ provides
-`on_success` and `on_failure` callbacks.
+If you want to execute a function whenever a job completes, fails, or is stopped, RQ provides
+`on_success`, `on_failure`, and `on_stopped` callbacks.
 
 ```python
-queue.enqueue(say_hello, on_success=report_success, on_failure=report_failure)
+queue.enqueue(say_hello, on_success=report_success, on_failure=report_failure, on_stopped=report_stopped)
 ```
+
+### Callback Class and Callback Timeouts
+
+_New in version 1.14.0_
+
+RQ lets you configure the method and timeout for each callback - success, failure, and stopped.   
+To configure callback timeouts, use RQ's
+`Callback` object that accepts `func` and `timeout` arguments. For example:
+
+```python
+from rq import Callback
+queue.enqueue(say_hello, 
+              on_success=Callback(report_success),  # default callback timeout (60 seconds) 
+              on_failure=Callback(report_failure, timeout=10), # 10 seconds timeout
+              on_stopped=Callback(report_stopped, timeout="2m")) # 2 minute timeout  
+```
+
+You can also pass the function as a string reference: `Callback('my_package.my_module.my_func')`
 
 ### Success Callback
 
@@ -232,6 +250,19 @@ def report_failure(job, connection, type, value, traceback):
 ```
 
 Failure callbacks are limited to 60 seconds of execution time.
+
+
+### Stopped Callbacks
+
+Stopped callbacks are functions that accept `job` and `connection` arguments.
+
+```python
+def report_stopped(job, connection):
+  pass
+```
+
+Stopped callbacks are functions that are executed when a worker receives a command to stop
+a job that is currently executing. See [Stopping a Job](https://python-rq.org/docs/workers/#stopping-a-job).
 
 
 ### CLI Enqueueing
