@@ -1,4 +1,4 @@
--e .
+-r requirements.txt
 packaging
 coverage
 psutil
