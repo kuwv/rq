@@ -1,3 +1,4 @@
+-r requirements.txt
 packaging==21.3
 coverage==6.2
 psutil
