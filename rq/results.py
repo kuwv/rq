@@ -2,7 +2,7 @@ import zlib
 from base64 import b64decode, b64encode
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from redis import Redis
 
@@ -11,8 +11,11 @@ from .job import Job
 from .serializers import resolve_serializer
 from .utils import decode_redis_hash, now
 
+if TYPE_CHECKING:
+    from redis.client import Pipeline
 
-def get_key(job_id):
+
+def get_key(job_id: str) -> str:
     return 'rq:results:%s' % job_id
 
 
@@ -29,10 +32,10 @@ class Result:
         connection: Redis,
         id: Optional[str] = None,
         created_at: Optional[datetime] = None,
-        return_value: Optional[Any] = None,
+        return_value: Optional[int] = None,
         exc_string: Optional[str] = None,
-        serializer=None,
-    ):
+        serializer: Optional[Any] = None,
+    ) -> None:
         self.return_value = return_value
         self.exc_string = exc_string
         self.type = type
@@ -42,20 +45,27 @@ class Result:
         self.job_id = job_id
         self.id = id
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'Result(id={self.id}, type={self.Type(self.type).name})'
 
-    def __eq__(self, other):
-        try:
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Result):
             return self.id == other.id
-        except AttributeError:
-            return False
+        return False
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.id)
 
     @classmethod
-    def create(cls, job, type, ttl, return_value=None, exc_string=None, pipeline=None):
+    def create(
+        cls,
+        job: Job,
+        type: Type,
+        ttl: int,
+        return_value: Optional[int] = None,
+        exc_string: Optional[str] = None,
+        pipeline: Optional['Pipeline'] = None,
+    ) -> 'Result':
         result = cls(
             job_id=job.id,
             type=type,
@@ -68,7 +78,13 @@ class Result:
         return result
 
     @classmethod
-    def create_failure(cls, job, ttl, exc_string, pipeline=None):
+    def create_failure(
+        cls,
+        job: Job,
+        ttl: int,
+        exc_string: str,
+        pipeline: Optional['Pipeline'] = None,
+    ) -> 'Result':
         result = cls(
             job_id=job.id,
             type=cls.Type.FAILED,
@@ -80,14 +96,20 @@ class Result:
         return result
 
     @classmethod
-    def all(cls, job: Job, serializer=None):
+    def all(cls, job: Job, serializer: Optional[Any] = None) -> List['Result']:
         """Returns all results for job"""
         # response = job.connection.zrange(cls.get_key(job.id), 0, 10, desc=True, withscores=True)
         response = job.connection.xrevrange(cls.get_key(job.id), '+', '-')
         results = []
         for result_id, payload in response:
             results.append(
-                cls.restore(job.id, result_id.decode(), payload, connection=job.connection, serializer=serializer)
+                cls.restore(
+                    job.id,
+                    result_id.decode(),
+                    payload,
+                    connection=job.connection,
+                    serializer=serializer,
+                )
             )
 
         return results
@@ -103,9 +125,18 @@ class Result:
         job.connection.delete(cls.get_key(job.id))
 
     @classmethod
-    def restore(cls, job_id: str, result_id: str, payload: dict, connection: Redis, serializer=None) -> 'Result':
+    def restore(
+        cls,
+        job_id: str,
+        result_id: str,
+        payload: Dict[Optional[str], Any],
+        connection: Redis,
+        serializer: Optional[Any] = None,
+    ) -> 'Result':
         """Create a Result object from given Redis payload"""
-        created_at = datetime.fromtimestamp(int(result_id.split('-')[0]) / 1000, tz=timezone.utc)
+        created_at = datetime.fromtimestamp(
+            int(result_id.split('-')[0]) / 1000, tz=timezone.utc
+        )
         payload = decode_redis_hash(payload)
         # data, timestamp = payload
         # result_data = json.loads(data)
@@ -131,7 +162,9 @@ class Result:
         )
 
     @classmethod
-    def fetch(cls, job: Job, serializer=None) -> Optional['Result']:
+    def fetch(
+        cls, job: Job, serializer: Optional[Any] = None
+    ) -> Optional['Result']:
         """Fetch a result that matches a given job ID. The current sorted set
         based implementation does not allow us to fetch a given key by ID
         so we need to iterate through results, deserialize the payload and
@@ -143,7 +176,9 @@ class Result:
         return None
 
     @classmethod
-    def fetch_latest(cls, job: Job, serializer=None, timeout: int = 0) -> Optional['Result']:
+    def fetch_latest(
+        cls, job: Job, serializer: Optional[Any] = None, timeout: int = 0
+    ) -> Optional['Result']:
         """Returns the latest result for given job instance or ID.
 
         If a non-zero timeout is provided, block for a result until timeout is reached.
@@ -152,28 +187,42 @@ class Result:
             # Unlike blpop, xread timeout is in miliseconds. "0-0" is the special value for the
             # first item in the stream, like '-' for xrevrange.
             timeout_ms = timeout * 1000
-            response = job.connection.xread({cls.get_key(job.id): "0-0"}, block=timeout_ms)
+            response = job.connection.xread(
+                {cls.get_key(job.id): "0-0"}, block=timeout_ms
+            )
             if not response:
                 return None
             response = response[0]  # Querying single stream only.
-            response = response[1]  # Xread also returns Result.id, which we don't need.
+            response = response[
+                1
+            ]  # Xread also returns Result.id, which we don't need.
             result_id, payload = response[-1]  # Take most recent result.
 
         else:
             # If not blocking, use xrevrange to load a single result (as xread will load them all).
-            response = job.connection.xrevrange(cls.get_key(job.id), '+', '-', count=1)
+            response = job.connection.xrevrange(
+                cls.get_key(job.id), '+', '-', count=1
+            )
             if not response:
                 return None
             result_id, payload = response[0]
 
-        res = cls.restore(job.id, result_id.decode(), payload, connection=job.connection, serializer=serializer)
+        res = cls.restore(
+            job.id,
+            result_id.decode(),
+            payload,
+            connection=job.connection,
+            serializer=serializer,
+        )
         return res
 
     @classmethod
-    def get_key(cls, job_id):
+    def get_key(cls, job_id: str) -> str:
         return 'rq:results:%s' % job_id
 
-    def save(self, ttl, pipeline=None):
+    def save(
+        self, ttl: int, pipeline: Optional['Pipeline'] = None
+    ) -> Optional[str]:
         """Save result data to Redis"""
         key = self.get_key(self.job_id)
 
@@ -190,16 +239,20 @@ class Result:
                 connection.expire(key, ttl)
         return self.id
 
-    def serialize(self):
+    def serialize(self) -> Dict[str, Any]:
         data = {'type': self.type.value}
 
         if self.exc_string is not None:
-            data['exc_string'] = b64encode(zlib.compress(self.exc_string.encode())).decode()
+            data['exc_string'] = b64encode(
+                zlib.compress(self.exc_string.encode())
+            ).decode()
 
         try:
             serialized = self.serializer.dumps(self.return_value)
         except:  # noqa
-            serialized = self.serializer.dumps(UNSERIALIZABLE_RETURN_VALUE_PAYLOAD)
+            serialized = self.serializer.dumps(
+                UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
+            )
 
         if self.return_value is not None:
             data['return_value'] = b64encode(serialized).decode()

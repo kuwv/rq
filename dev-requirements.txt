@@ -1,0 +1,8 @@
+-r requirements.txt
+codecov
+psutil
+pytest
+pytest-cov
+sentry-sdk
+mypy
+types-redis

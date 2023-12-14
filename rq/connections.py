@@ -1,6 +1,6 @@
 import warnings
 from contextlib import contextmanager
-from typing import Optional, Tuple, Type
+from typing import Generator, Optional, Tuple, Type
 
 from redis import Connection as RedisConnection
 from redis import Redis
@@ -13,7 +13,7 @@ class NoRedisConnectionException(Exception):
 
 
 @contextmanager
-def Connection(connection: Optional['Redis'] = None):  # noqa
+def Connection(connection: Optional['Redis'] = None) -> Generator:  # noqa
     """The context manager for handling connections in a clean way.
     It will push the connection to the LocalStack, and pop the connection
     when leaving the context
@@ -48,7 +48,7 @@ def Connection(connection: Optional['Redis'] = None):  # noqa
         ), 'Unexpected Redis connection was popped off the stack. Check your Redis connection setup.'
 
 
-def push_connection(redis: 'Redis'):
+def push_connection(redis: 'Redis') -> None:
     """
     Pushes the given connection to the stack.
 
@@ -114,12 +114,18 @@ def resolve_connection(connection: Optional['Redis'] = None) -> 'Redis':
 
     connection = get_current_connection()
     if connection is None:
-        raise NoRedisConnectionException('Could not resolve a Redis connection')
+        raise NoRedisConnectionException(
+            'Could not resolve a Redis connection'
+        )
     return connection
 
 
-def parse_connection(connection: Redis) -> Tuple[Type[Redis], Type[RedisConnection], dict]:
-    connection_pool_kwargs = connection.connection_pool.connection_kwargs.copy()
+def parse_connection(
+    connection: Redis,
+) -> Tuple[Type[Redis], Type[RedisConnection], dict]:
+    connection_pool_kwargs = (
+        connection.connection_pool.connection_kwargs.copy()
+    )
     connection_pool_class = connection.connection_pool.connection_class
 
     return connection.__class__, connection_pool_class, connection_pool_kwargs
@@ -128,4 +134,9 @@ def parse_connection(connection: Redis) -> Tuple[Type[Redis], Type[RedisConnecti
 _connection_stack = LocalStack()
 
 
-__all__ = ['Connection', 'get_current_connection', 'push_connection', 'pop_connection']
+__all__ = [
+    'Connection',
+    'get_current_connection',
+    'push_connection',
+    'pop_connection',
+]

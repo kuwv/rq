@@ -1,6 +1,9 @@
 import logging
 import sys
-from typing import Union
+from typing import TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT
 
@@ -110,7 +113,7 @@ def setup_loghandlers(
     date_format: str = DEFAULT_LOGGING_DATE_FORMAT,
     log_format: str = DEFAULT_LOGGING_FORMAT,
     name: str = 'rq.worker',
-):
+) -> None:
     """Sets up a log handler.
 
     Args:
@@ -140,7 +143,7 @@ def setup_loghandlers(
         logger.setLevel(level if isinstance(level, int) else level.upper())
 
 
-def _has_effective_handler(logger) -> bool:
+def _has_effective_handler(logger: 'Logger') -> bool:
     """
     Checks if a logger has a handler that will catch its messages in its logger hierarchy.
 

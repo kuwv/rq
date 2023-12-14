@@ -23,7 +23,7 @@ class DequeueTimeout(Exception):
 
 
 class ShutDownImminentException(Exception):
-    def __init__(self, msg, extra_info):
+    def __init__(self, msg: str, extra_info: str) -> None:
         self.extra_info = extra_info
         super().__init__(msg)
 

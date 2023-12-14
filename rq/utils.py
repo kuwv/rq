@@ -12,9 +12,10 @@ import importlib
 import logging
 import numbers
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Generator, Optional, Tuple, TypeVar, Union, overload
 
 if TYPE_CHECKING:
+    from logging import LogRecord
     from redis import Redis
 
     from .queue import Queue
@@ -38,7 +39,17 @@ def compact(lst: List[Any]) -> List[Any]:
     return [item for item in lst if item is not None]
 
 
+@overload
 def as_text(v: Union[bytes, str]) -> str:
+    ...
+
+
+@overload
+def as_text(v: None) -> None:
+    ...
+
+
+def as_text(v: Union[None, bytes, str]) -> Optional[str]:
     """Converts a bytes value to a string using `utf-8`.
 
     Args:
@@ -54,11 +65,10 @@ def as_text(v: Union[bytes, str]) -> str:
         return v.decode('utf-8')
     elif isinstance(v, str):
         return v
-    else:
-        raise ValueError('Unknown type %r' % type(v))
+    raise ValueError('Unknown type %r' % type(v))
 
 
-def decode_redis_hash(h) -> Dict[str, Any]:
+def decode_redis_hash(h: Dict[Any, Any]) -> Dict[Optional[str], Any]:
     """Decodes the Redis hash, ensuring that keys are strings
     Most importantly, decodes bytes strings, ensuring the dict has str keys.
 
@@ -71,7 +81,7 @@ def decode_redis_hash(h) -> Dict[str, Any]:
     return dict((as_text(k), h[k]) for k in h)
 
 
-def import_attribute(name: str) -> Callable[..., Any]:
+def import_attribute(name: str) -> Any:
     """Returns an attribute from a dotted path name. Example: `path.to.func`.
 
     When the attribute we look for is a staticmethod, module name in its
@@ -124,11 +134,11 @@ def import_attribute(name: str) -> Callable[..., Any]:
     return getattr(attribute_owner, attribute_name)
 
 
-def utcnow():
+def utcnow() -> dt.datetime:
     return datetime.datetime.utcnow()
 
 
-def now():
+def now() -> dt.datetime:
     """Return now in UTC"""
     return datetime.datetime.now(datetime.timezone.utc)
 
@@ -137,7 +147,11 @@ _TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
 
 def utcformat(dt: dt.datetime) -> str:
-    return dt.strftime(as_text(_TIMESTAMP_FORMAT))
+    # return dt.strftime(as_text(_TIMESTAMP_FORMAT))
+    timestamp = as_text(_TIMESTAMP_FORMAT)
+    if timestamp:
+        return dt.strftime(timestamp)
+    raise
 
 
 def utcparse(string: str) -> dt.datetime:
@@ -148,7 +162,7 @@ def utcparse(string: str) -> dt.datetime:
         return datetime.datetime.strptime(string, '%Y-%m-%dT%H:%M:%SZ')
 
 
-def first(iterable: Iterable, default=None, key=None):
+def first(iterable: Iterable, default: Optional[Any] = None, key: Optional[Callable] = None) -> Optional[Any]:
     """Return first element of `iterable` that evaluates true, else return None
     (or an optional default value).
 
@@ -205,7 +219,7 @@ def is_nonstring_iterable(obj: Any) -> bool:
     return isinstance(obj, Iterable) and not isinstance(obj, str)
 
 
-def ensure_list(obj: Any) -> List:
+def ensure_list(obj: Any) -> List[Any]:
     """When passed an iterable of objects, does nothing, otherwise, it returns
     a list with just that object in it.
 
@@ -227,7 +241,7 @@ def current_timestamp() -> int:
     return calendar.timegm(datetime.datetime.utcnow().utctimetuple())
 
 
-def backend_class(holder, default_name, override=None) -> TypeVar('T'):
+def backend_class(holder: object, default_name: str, override: Optional[Type] = None) -> TypeVar('T'):
     """Get a backend class using its default attribute name or an override
 
     Args:
@@ -242,15 +256,13 @@ def backend_class(holder, default_name, override=None) -> TypeVar('T'):
         return getattr(holder, default_name)
     elif isinstance(override, str):
         return import_attribute(override)
-    else:
-        return override
+    return override
 
 
-def str_to_date(date_str: Optional[str]) -> Union[dt.datetime, Any]:
+def str_to_date(date_str: Union[None, bytes, str]) -> Union[Any, None, dt.datetime]:
     if not date_str:
-        return
-    else:
-        return utcparse(date_str.decode())
+        return None
+    return utcparse(date_str.decode() if isinstance(date_str, bytes) else date_str)
 
 
 def parse_timeout(timeout: Optional[Union[int, float, str]]) -> Optional[int]:
@@ -269,7 +281,6 @@ def parse_timeout(timeout: Optional[Union[int, float, str]]) -> Optional[int]:
                     'a string with format: digits + unit, unit can be "d", "h", "m", "s", '
                     'such as "1h", "23m".'
                 )
-
     return timeout
 
 
@@ -297,7 +308,7 @@ def get_version(connection: 'Redis') -> Tuple[int, int, int]:
         return (5, 0, 9)
 
 
-def ceildiv(a, b):
+def ceildiv(a: float, b: float) -> float:
     """Ceiling division. Returns the ceiling of the quotient of a division operation
 
     Args:
@@ -310,7 +321,7 @@ def ceildiv(a, b):
     return -(-a // b)
 
 
-def split_list(a_list: List[Any], segment_size: int):
+def split_list(a_list: List[Any], segment_size: int) -> Generator[List[Any], None, None]:
     """Splits a list into multiple smaller lists having size `segment_size`
 
     Args:
@@ -321,7 +332,7 @@ def split_list(a_list: List[Any], segment_size: int):
         list: The splitted listed
     """
     for i in range(0, len(a_list), segment_size):
-        yield a_list[i : i + segment_size]
+        yield a_list[i: i + segment_size]
 
 
 def truncate_long_string(data: str, max_length: Optional[int] = None) -> str:
@@ -363,7 +374,7 @@ def get_call_string(
 
     list_kwargs = ['{0}={1}'.format(k, as_text(truncate_long_string(repr(v), max_length))) for k, v in kwargs.items()]
     arg_list += sorted(list_kwargs)
-    args = ', '.join(arg_list)
+    args = ', '.join([x for x in arg_list if x])
 
     return '{0}({1})'.format(func_name, args)
 

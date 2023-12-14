@@ -1,7 +1,7 @@
 import json
 import os
 import signal
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -14,7 +14,7 @@ from rq.job import Job
 PUBSUB_CHANNEL_TEMPLATE = 'rq:pubsub:%s'
 
 
-def send_command(connection: 'Redis', worker_name: str, command: str, **kwargs):
+def send_command(connection: 'Redis', worker_name: str, command: str, **kwargs: Any) -> None:
     """
     Sends a command to a worker.
     A command is just a string, availble commands are:
@@ -42,10 +42,10 @@ def parse_payload(payload: Dict[Any, Any]) -> Dict[Any, Any]:
     Args:
         payload (dict): Parses the payload dict.
     """
-    return json.loads(payload.get('data').decode())
+    return json.loads(payload['data'].decode())
 
 
-def send_shutdown_command(connection: 'Redis', worker_name: str):
+def send_shutdown_command(connection: 'Redis', worker_name: str) -> None:
     """
     Sends a command to shutdown a worker.
 
@@ -56,7 +56,7 @@ def send_shutdown_command(connection: 'Redis', worker_name: str):
     send_command(connection, worker_name, 'shutdown')
 
 
-def send_kill_horse_command(connection: 'Redis', worker_name: str):
+def send_kill_horse_command(connection: 'Redis', worker_name: str) -> None:
     """
     Tell worker to kill it's horse
 
@@ -67,7 +67,7 @@ def send_kill_horse_command(connection: 'Redis', worker_name: str):
     send_command(connection, worker_name, 'kill-horse')
 
 
-def send_stop_job_command(connection: 'Redis', job_id: str, serializer=None):
+def send_stop_job_command(connection: 'Redis', job_id: str, serializer: Optional[str] = None) -> None:
     """
     Instruct a worker to stop a job
 
@@ -82,7 +82,7 @@ def send_stop_job_command(connection: 'Redis', job_id: str, serializer=None):
     send_command(connection, job.worker_name, 'stop-job', job_id=job_id)
 
 
-def handle_command(worker: 'Worker', payload: Dict[Any, Any]):
+def handle_command(worker: 'Worker', payload: Dict[Any, Any]) -> None:
     """Parses payload and routes commands to the worker.
 
     Args:
@@ -97,7 +97,7 @@ def handle_command(worker: 'Worker', payload: Dict[Any, Any]):
         handle_kill_worker_command(worker, payload)
 
 
-def handle_shutdown_command(worker: 'Worker'):
+def handle_shutdown_command(worker: 'Worker') -> None:
     """Perform shutdown command.
 
     Args:
@@ -108,7 +108,7 @@ def handle_shutdown_command(worker: 'Worker'):
     os.kill(pid, signal.SIGINT)
 
 
-def handle_kill_worker_command(worker: 'Worker', payload: Dict[Any, Any]):
+def handle_kill_worker_command(worker: 'Worker', payload: Dict[Any, Any]) -> None:
     """
     Stops work horse
 
@@ -116,7 +116,6 @@ def handle_kill_worker_command(worker: 'Worker', payload: Dict[Any, Any]):
         worker (Worker): The worker to stop
         payload (Dict[Any, Any]): The payload.
     """
-
     worker.log.info('Received kill horse command.')
     if worker.horse_pid:
         worker.log.info('Kiling horse...')
@@ -125,7 +124,7 @@ def handle_kill_worker_command(worker: 'Worker', payload: Dict[Any, Any]):
         worker.log.info('Worker is not working, kill horse command ignored')
 
 
-def handle_stop_job_command(worker: 'Worker', payload: Dict[Any, Any]):
+def handle_stop_job_command(worker: 'Worker', payload: Dict[Any, Any]) -> None:
     """Handles stop job command.
 
     Args:

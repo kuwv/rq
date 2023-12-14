@@ -6,18 +6,26 @@ import traceback
 from datetime import datetime
 from enum import Enum
 from multiprocessing import Process
-from typing import Iterable, List, Optional, Set, Union
+from types import FrameType
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Set, Union
 
 from redis import ConnectionPool, Redis
 
 from .connections import parse_connection
-from .defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT, DEFAULT_SCHEDULER_FALLBACK_PERIOD
+from .defaults import (
+    DEFAULT_LOGGING_DATE_FORMAT,
+    DEFAULT_LOGGING_FORMAT,
+    DEFAULT_SCHEDULER_FALLBACK_PERIOD,
+)
 from .job import Job
 from .logutils import setup_loghandlers
 from .queue import Queue
 from .registry import ScheduledJobRegistry
 from .serializers import resolve_serializer
 from .utils import current_timestamp, parse_names
+
+if TYPE_CHECKING:
+    from redis import Redis
 
 SCHEDULER_KEY_TEMPLATE = 'rq:scheduler:%s'
 SCHEDULER_LOCKING_KEY_TEMPLATE = 'rq:scheduler-lock:%s'
@@ -38,26 +46,30 @@ class RQScheduler:
 
     def __init__(
         self,
-        queues,
-        connection: Redis,
-        interval=1,
-        logging_level: Union[str, int] = logging.INFO,
-        date_format=DEFAULT_LOGGING_DATE_FORMAT,
-        log_format=DEFAULT_LOGGING_FORMAT,
-        serializer=None,
-    ):
+        queues: Iterable[Union['Queue', str]],
+        connection: 'Redis',
+        interval: int = 1,
+        logging_level: Union[int, str] = logging.INFO,
+        date_format: str = DEFAULT_LOGGING_DATE_FORMAT,
+        log_format: str = DEFAULT_LOGGING_FORMAT,
+        serializer: Optional[Any] = None,
+    ) -> None:
         self._queue_names = set(parse_names(queues))
         self._acquired_locks: Set[str] = set()
         self._scheduled_job_registries: List[ScheduledJobRegistry] = []
         self.lock_acquisition_time = None
-        self._connection_class, self._pool_class, self._pool_kwargs = parse_connection(connection)
+        (
+            self._connection_class,
+            self._pool_class,
+            self._pool_kwargs,
+        ) = parse_connection(connection)
         self.serializer = resolve_serializer(serializer)
 
-        self._connection = None
+        self._connection: Optional['Redis'] = None
         self.interval = interval
         self._stop_requested = False
         self._status = self.Status.STOPPED
-        self._process = None
+        self._process: Optional[Process] = None
         self.log = logging.getLogger(__name__)
         setup_loghandlers(
             level=logging_level,
@@ -67,38 +79,46 @@ class RQScheduler:
         )
 
     @property
-    def connection(self):
+    def connection(self) -> 'Redis':
         if self._connection:
             return self._connection
         self._connection = self._connection_class(
-            connection_pool=ConnectionPool(connection_class=self._pool_class, **self._pool_kwargs)
+            connection_pool=ConnectionPool(
+                connection_class=self._pool_class, **self._pool_kwargs
+            )
         )
         return self._connection
 
     @property
-    def acquired_locks(self):
+    def acquired_locks(self) -> Set[str]:
         return self._acquired_locks
 
     @property
-    def status(self):
+    def status(self) -> SchedulerStatus:
         return self._status
 
     @property
-    def should_reacquire_locks(self):
+    def should_reacquire_locks(self) -> bool:
         """Returns True if lock_acquisition_time is longer than 10 minutes ago"""
         if self._queue_names == self.acquired_locks:
             return False
         if not self.lock_acquisition_time:
             return True
-        return (datetime.now() - self.lock_acquisition_time).total_seconds() > DEFAULT_SCHEDULER_FALLBACK_PERIOD
+        return (
+            datetime.now() - self.lock_acquisition_time
+        ).total_seconds() > DEFAULT_SCHEDULER_FALLBACK_PERIOD
 
-    def acquire_locks(self, auto_start=False):
+    def acquire_locks(self, auto_start: bool = False) -> Set[str]:
         """Returns names of queue it successfully acquires lock on"""
         successful_locks = set()
         pid = os.getpid()
-        self.log.debug('Trying to acquire locks for %s', ', '.join(self._queue_names))
+        self.log.debug(
+            'Trying to acquire locks for %s', ', '.join(self._queue_names)
+        )
         for name in self._queue_names:
-            if self.connection.set(self.get_locking_key(name), pid, nx=True, ex=self.interval + 60):
+            if self.connection.set(
+                self.get_locking_key(name), pid, nx=True, ex=self.interval + 60
+            ):
                 successful_locks.add(name)
 
         # Always reset _scheduled_job_registries when acquiring locks
@@ -114,22 +134,27 @@ class RQScheduler:
 
         return successful_locks
 
-    def prepare_registries(self, queue_names: Optional[Iterable[str]] = None):
+    def prepare_registries(
+        self, queue_names: Optional[Iterable[str]] = None
+    ) -> None:
         """Prepare scheduled job registries for use"""
         self._scheduled_job_registries = []
-        if not queue_names:
-            queue_names = self._acquired_locks
-        for name in queue_names:
+        names = queue_names if queue_names else self._acquired_locks
+        for name in names:
             self._scheduled_job_registries.append(
-                ScheduledJobRegistry(name, connection=self.connection, serializer=self.serializer)
+                ScheduledJobRegistry(
+                    name,
+                    connection=self.connection,
+                    serializer=self.serializer,
+                )
             )
 
     @classmethod
-    def get_locking_key(cls, name: str):
+    def get_locking_key(cls, name: str) -> str:
         """Returns scheduler key for a given queue name"""
         return SCHEDULER_LOCKING_KEY_TEMPLATE % name
 
-    def enqueue_scheduled_jobs(self):
+    def enqueue_scheduled_jobs(self) -> None:
         """Enqueue jobs whose timestamp is in the past"""
         self._status = self.Status.WORKING
 
@@ -139,38 +164,53 @@ class RQScheduler:
         for registry in self._scheduled_job_registries:
             timestamp = current_timestamp()
 
-            # TODO: try to use Lua script to make get_jobs_to_schedule()
-            # and remove_jobs() atomic
-            job_ids = registry.get_jobs_to_schedule(timestamp)
+            # TODO: try to use Lua script to make get_jobs_to_schedule() and remove_jobs() atomic
+            job_ids = registry.get_jobs_to_schedule(timestamp)  # type: ignore
 
             if not job_ids:
                 continue
 
-            queue = Queue(registry.name, connection=self.connection, serializer=self.serializer)
+            queue = Queue(
+                registry.name,
+                connection=self.connection,
+                serializer=self.serializer,
+            )
 
             with self.connection.pipeline() as pipeline:
-                jobs = Job.fetch_many(job_ids, connection=self.connection, serializer=self.serializer)
+                jobs = Job.fetch_many(
+                    job_ids,
+                    connection=self.connection,
+                    serializer=self.serializer,
+                )
                 for job in jobs:
                     if job is not None:
-                        queue._enqueue_job(job, pipeline=pipeline, at_front=bool(job.enqueue_at_front))
+                        queue._enqueue_job(
+                            job,
+                            pipeline=pipeline,
+                            at_front=bool(job.enqueue_at_front),
+                        )
                         registry.remove(job, pipeline=pipeline)
                 pipeline.execute()
         self._status = self.Status.STARTED
 
-    def _install_signal_handlers(self):
+    def _install_signal_handlers(self) -> None:
         """Installs signal handlers for handling SIGINT and SIGTERM
         gracefully.
         """
         signal.signal(signal.SIGINT, self.request_stop)
         signal.signal(signal.SIGTERM, self.request_stop)
 
-    def request_stop(self, signum=None, frame=None):
+    def request_stop(
+        self, signum: Optional[int] = None, frame: Optional[FrameType] = None
+    ) -> None:
         """Toggle self._stop_requested that's checked on every loop"""
         self._stop_requested = True
 
-    def heartbeat(self):
+    def heartbeat(self) -> None:
         """Updates the TTL on scheduler keys and the locks"""
-        self.log.debug('Scheduler sending heartbeat to %s', ', '.join(self.acquired_locks))
+        self.log.debug(
+            'Scheduler sending heartbeat to %s', ', '.join(self.acquired_locks)
+        )
         if len(self._acquired_locks) > 1:
             with self.connection.pipeline() as pipeline:
                 for name in self._acquired_locks:
@@ -181,18 +221,21 @@ class RQScheduler:
             key = self.get_locking_key(next(iter(self._acquired_locks)))
             self.connection.expire(key, self.interval + 60)
 
-    def stop(self):
-        self.log.info('Scheduler stopping, releasing locks for %s...', ', '.join(self._acquired_locks))
+    def stop(self) -> None:
+        self.log.info(
+            'Scheduler stopping, releasing locks for %s...',
+            ', '.join(self._acquired_locks),
+        )
         self.release_locks()
         self._status = self.Status.STOPPED
 
-    def release_locks(self):
+    def release_locks(self) -> None:
         """Release acquired locks"""
         keys = [self.get_locking_key(name) for name in self._acquired_locks]
         self.connection.delete(*keys)
         self._acquired_locks = set()
 
-    def start(self):
+    def start(self) -> Process:
         self._status = self.Status.STARTED
         # Redis instance can't be pickled across processes so we need to
         # clean this up before forking
@@ -201,7 +244,7 @@ class RQScheduler:
         self._process.start()
         return self._process
 
-    def work(self):
+    def work(self) -> None:
         self._install_signal_handlers()
 
         while True:
@@ -217,11 +260,19 @@ class RQScheduler:
             time.sleep(self.interval)
 
 
-def run(scheduler):
-    scheduler.log.info('Scheduler for %s started with PID %s', ', '.join(scheduler._queue_names), os.getpid())
+def run(scheduler: RQScheduler) -> None:
+    scheduler.log.info(
+        'Scheduler for %s started with PID %s',
+        ', '.join(scheduler._queue_names),
+        os.getpid(),
+    )
     try:
         scheduler.work()
     except:  # noqa
-        scheduler.log.error('Scheduler [PID %s] raised an exception.\n%s', os.getpid(), traceback.format_exc())
+        scheduler.log.error(
+            'Scheduler [PID %s] raised an exception.\n%s',
+            os.getpid(),
+            traceback.format_exc(),
+        )
         raise
     scheduler.log.info('Scheduler with PID %d has stopped', os.getpid())

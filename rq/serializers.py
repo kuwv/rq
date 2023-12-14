@@ -1,7 +1,7 @@
 import json
 import pickle
 from functools import partial
-from typing import Optional, Type, Union
+from typing import Any, Dict, Optional, Type, Union
 
 from .utils import import_attribute
 
@@ -13,12 +13,12 @@ class DefaultSerializer:
 
 class JSONSerializer:
     @staticmethod
-    def dumps(*args, **kwargs):
+    def dumps(*args: Any, **kwargs: Any) -> bytes:
         return json.dumps(*args, **kwargs).encode('utf-8')
 
     @staticmethod
-    def loads(s, *args, **kwargs):
-        return json.loads(s.decode('utf-8'), *args, **kwargs)
+    def loads(s: Union[bytes, str], *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        return json.loads(s.decode('utf-8') if isinstance(s, bytes) else s, *args, **kwargs)
 
 
 def resolve_serializer(serializer: Optional[Union[Type[DefaultSerializer], str]] = None) -> Type[DefaultSerializer]:
