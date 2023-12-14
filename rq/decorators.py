@@ -1,10 +1,19 @@
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Type,
+    Union,
+)
 
 if TYPE_CHECKING:
     from redis import Redis
 
-    from .job import Retry
+    from .job import Job, Retry
 
 from .defaults import DEFAULT_RESULT_TTL
 from .job import Callback
@@ -13,7 +22,7 @@ from .utils import backend_class
 
 
 class job:  # noqa
-    queue_class = Queue
+    queue_class: Type['Queue'] = Queue
 
     def __init__(
         self,
@@ -25,14 +34,14 @@ class job:  # noqa
         queue_class: Optional[Type['Queue']] = None,
         depends_on: Optional[List[Any]] = None,
         at_front: bool = False,
-        meta: Optional[Dict[Any, Any]] = None,
+        meta: Optional[Dict[str, Any]] = None,
         description: Optional[str] = None,
         failure_ttl: Optional[int] = None,
         retry: Optional['Retry'] = None,
-        on_failure: Optional[Union[Callback, Callable[..., Any]]] = None,
-        on_success: Optional[Union[Callback, Callable[..., Any]]] = None,
-        on_stopped: Optional[Union[Callback, Callable[..., Any]]] = None,
-    ):
+        on_failure: Optional[Union[Callable, Callback]] = None,
+        on_success: Optional[Union[Callable, Callback]] = None,
+        on_stopped: Optional[Union[Callable, Callback]] = None,
+    ) -> None:
         """A decorator that adds a ``delay`` method to the decorated function,
         which in turn creates a RQ job when called. Accepts a required
         ``queue`` argument that can be either a ``Queue`` instance or a string
@@ -83,9 +92,9 @@ class job:  # noqa
         self.on_failure = on_failure
         self.on_stopped = on_stopped
 
-    def __call__(self, f):
+    def __call__(self, f: Callable) -> Callable:
         @wraps(f)
-        def delay(*args, **kwargs):
+        def delay(*args: Any, **kwargs: Any) -> 'Job':
             if isinstance(self.queue, str):
                 queue = self.queue_class(name=self.queue, connection=self.connection)
             else:
@@ -120,5 +129,5 @@ class job:  # noqa
                 on_stopped=self.on_stopped,
             )
 
-        f.delay = delay
+        setattr(f, 'delay', delay)
         return f

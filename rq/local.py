@@ -1,4 +1,6 @@
 # ruff: noqa: E731
+from typing import Any, Callable, Dict, List, Optional, Union
+
 """
     werkzeug.local
     ~~~~~~~~~~~~~~
@@ -23,7 +25,7 @@ except ImportError:
             from dummy_thread import get_ident
 
 
-def release_local(local):
+def release_local(local: 'Local') -> None:
     """Releases the contents of the local for the current context.
     This makes it possible to use locals without a manager.
 
@@ -49,27 +51,27 @@ def release_local(local):
 class Local:
     __slots__ = ('__storage__', '__ident_func__')
 
-    def __init__(self):
+    def __init__(self) -> None:
         object.__setattr__(self, '__storage__', {})
         object.__setattr__(self, '__ident_func__', get_ident)
 
-    def __iter__(self):
+    def __iter__(self) -> None:
         return iter(self.__storage__.items())
 
-    def __call__(self, proxy):
+    def __call__(self, proxy: str) -> Callable:
         """Create a proxy for a name."""
         return LocalProxy(self, proxy)
 
-    def __release_local__(self):
+    def __release_local__(self) -> None:
         self.__storage__.pop(self.__ident_func__(), None)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         try:
             return self.__storage__[self.__ident_func__()][name]
         except KeyError:
             raise AttributeError(name)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:
         ident = self.__ident_func__()
         storage = self.__storage__
         try:
@@ -77,7 +79,7 @@ class Local:
         except KeyError:
             storage[ident] = {name: value}
 
-    def __delattr__(self, name):
+    def __delattr__(self, name: str) -> None:
         try:
             del self.__storage__[self.__ident_func__()][name]
         except KeyError:
@@ -111,23 +113,23 @@ class LocalStack:
     .. versionadded:: 0.6.1
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._local = Local()
 
-    def __release_local__(self):
+    def __release_local__(self) -> None:
         self._local.__release_local__()
 
-    def _get__ident_func__(self):
+    def _get__ident_func__(self) -> str:
         return self._local.__ident_func__
 
-    def _set__ident_func__(self, value):
+    def _set__ident_func__(self, value: Any) -> None:
         object.__setattr__(self._local, '__ident_func__', value)
 
     __ident_func__ = property(_get__ident_func__, _set__ident_func__)
     del _get__ident_func__, _set__ident_func__
 
-    def __call__(self):
-        def _lookup():
+    def __call__(self) -> Callable:
+        def _lookup() -> Local:
             rv = self.top
             if rv is None:
                 raise RuntimeError('object unbound')
@@ -135,7 +137,7 @@ class LocalStack:
 
         return LocalProxy(_lookup)
 
-    def push(self, obj):
+    def push(self, obj: Any) -> Union[List[Any], Any]:
         """Pushes a new item to the stack"""
         rv = getattr(self._local, 'stack', None)
         if rv is None:
@@ -143,7 +145,7 @@ class LocalStack:
         rv.append(obj)
         return rv
 
-    def pop(self):
+    def pop(self) -> Optional[Any]:
         """Removes the topmost item from the stack, will return the
         old value or `None` if the stack was already empty.
         """
@@ -153,11 +155,10 @@ class LocalStack:
         elif len(stack) == 1:
             release_local(self._local)
             return stack[-1]
-        else:
-            return stack.pop()
+        return stack.pop()
 
     @property
-    def top(self):
+    def top(self) -> Optional[Any]:
         """The topmost item on the stack.  If the stack is empty,
         `None` is returned.
         """
@@ -166,7 +167,7 @@ class LocalStack:
         except (AttributeError, IndexError):
             return None
 
-    def __len__(self):
+    def __len__(self) -> int:
         stack = getattr(self._local, 'stack', None)
         if stack is None:
             return 0
@@ -190,7 +191,7 @@ class LocalManager:
        `ident_func` was added.
     """
 
-    def __init__(self, locals=None, ident_func=None):
+    def __init__(self, locals: Optional[List['Local']] = None, ident_func: Optional[Callable] = None) -> None:
         if locals is None:
             self.locals = []
         elif isinstance(locals, Local):
@@ -204,7 +205,7 @@ class LocalManager:
         else:
             self.ident_func = get_ident
 
-    def get_ident(self):
+    def get_ident(self) -> str:
         """Return the context identifier the local objects use internally for
         this context.  You cannot override this method to change the behavior
         but use it to link other context local objects (such as SQLAlchemy's
@@ -217,14 +218,14 @@ class LocalManager:
         """
         return self.ident_func()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Manually clean up the data in the locals for this context.  Call
         this at the end of the request or use `make_middleware()`.
         """
         for local in self.locals:
             release_local(local)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<%s storages: %d>' % (self.__class__.__name__, len(self.locals))
 
 
@@ -266,11 +267,11 @@ class LocalProxy:
 
     __slots__ = ('__local', '__dict__', '__name__')
 
-    def __init__(self, local, name=None):
+    def __init__(self, local: 'Local', name: Optional[str] = None) -> None:
         object.__setattr__(self, '_LocalProxy__local', local)
         object.__setattr__(self, '__name__', name)
 
-    def _get_current_object(self):
+    def _get_current_object(self) -> Any:
         """Return the current object.  This is useful if you want the real
         object behind the proxy at a time for performance reasons or because
         you want to pass the object into a different context.
@@ -283,34 +284,34 @@ class LocalProxy:
             raise RuntimeError('no object bound to %s' % self.__name__)
 
     @property
-    def __dict__(self):
+    def __dict__(self) -> Dict[str, Any]:  # type: ignore
         try:
             return self._get_current_object().__dict__
         except RuntimeError:
             raise AttributeError('__dict__')
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         try:
             obj = self._get_current_object()
         except RuntimeError:
             return '<%s unbound>' % self.__class__.__name__
         return repr(obj)
 
-    def __dir__(self):
+    def __dir__(self) -> List[str]:
         try:
             return dir(self._get_current_object())
         except RuntimeError:
             return []
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         if name == '__members__':
             return dir(self._get_current_object())
         return getattr(self._get_current_object(), name)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:
         self._get_current_object()[key] = value
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         del self._get_current_object()[key]
 
     __setattr__ = lambda x, n, v: setattr(x._get_current_object(), n, v)
@@ -318,8 +319,6 @@ class LocalProxy:
     __str__ = lambda x: str(x._get_current_object())
     __lt__ = lambda x, o: x._get_current_object() < o
     __le__ = lambda x, o: x._get_current_object() <= o
-    __eq__ = lambda x, o: x._get_current_object() == o
-    __ne__ = lambda x, o: x._get_current_object() != o
     __gt__ = lambda x, o: x._get_current_object() > o
     __ge__ = lambda x, o: x._get_current_object() >= o
     __hash__ = lambda x: hash(x._get_current_object())
