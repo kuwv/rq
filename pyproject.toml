@@ -124,6 +124,7 @@ disallow_untyped_calls = true
 disallow_untyped_defs = true
 exclude = [
     "build/",
+    "examples/",
     "tests/",
 ]
 implicit_optional = true

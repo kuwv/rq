@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Optional
 from rq import Worker, get_current_connection
 
 if TYPE_CHECKING:
+    from redis import Redis
+
     from rq import BaseWorker
     from rq.connection import Connection
 

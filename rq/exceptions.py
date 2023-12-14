@@ -1,3 +1,6 @@
+from typing import Any, Dict
+
+
 class NoSuchJobError(Exception):
     pass
 
@@ -23,7 +26,7 @@ class DequeueTimeout(Exception):
 
 
 class ShutDownImminentException(Exception):
-    def __init__(self, msg: str, extra_info: str) -> None:
+    def __init__(self, msg: str, extra_info: Dict[str, Any]) -> None:
         self.extra_info = extra_info
         super().__init__(msg)
 
