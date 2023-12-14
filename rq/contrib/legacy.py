@@ -12,9 +12,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def cleanup_ghosts(
-    conn: Optional['Connection'] = None, worker_class: 'BaseWorker' = Worker
-) -> None:
+def cleanup_ghosts(conn: Optional['Connection'] = None, worker_class: 'BaseWorker' = Worker) -> None:
     """
     RQ versions < 0.3.6 suffered from a race condition where workers, when
     abruptly terminated, did not have a chance to clean up their worker
@@ -29,8 +27,4 @@ def cleanup_ghosts(
         if conn.ttl(worker.key) == -1:
             ttl = worker.worker_ttl
             conn.expire(worker.key, ttl)
-            logger.info(
-                'Marked ghosted worker {0} to expire in {1} seconds.'.format(
-                    worker.name, ttl
-                )
-            )
+            logger.info('Marked ghosted worker {0} to expire in {1} seconds.'.format(worker.name, ttl))

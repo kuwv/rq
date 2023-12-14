@@ -121,9 +121,7 @@ class Queue:
             )
 
         all_registerd_queues = connection.smembers(cls.redis_queues_keys)
-        all_queues = [
-            to_queue(rq_key) for rq_key in all_registerd_queues if rq_key
-        ]
+        all_queues = [to_queue(rq_key) for rq_key in all_registerd_queues if rq_key]
         return all_queues
 
     @classmethod
@@ -175,7 +173,6 @@ class Queue:
             str: The intermediate queue key
         """
         return f'{key}:intermediate'
-        )
 
     def __init__(
         self,
@@ -206,9 +203,7 @@ class Queue:
         prefix = self.redis_queue_namespace_prefix
         self.name = name
         self._key = '{0}{1}'.format(prefix, name)
-        self._default_timeout = (
-            parse_timeout(default_timeout) or self.DEFAULT_TIMEOUT
-        )
+        self._default_timeout = parse_timeout(default_timeout) or self.DEFAULT_TIMEOUT
         self._is_async = is_async
         self.log = logger
 
@@ -277,9 +272,7 @@ class Queue:
         Returns:
             lock_acquired (bool)
         """
-        lock_acquired = self.connection.set(
-            self.registry_cleaning_key, 1, nx=True, ex=899
-        )
+        lock_acquired = self.connection.set(self.registry_cleaning_key, 1, nx=True, ex=899)
         if not lock_acquired:
             return False
         return lock_acquired
@@ -357,9 +350,7 @@ class Queue:
             job (Optional[Job]): The job if found
         """
         try:
-            job = self.job_class.fetch(
-                job_id, connection=self.connection, serializer=self.serializer
-            )
+            job = self.job_class.fetch(job_id, connection=self.connection, serializer=self.serializer)
         except NoSuchJobError:
             self.remove(job_id)
         else:
@@ -381,11 +372,7 @@ class Queue:
         Returns:
             _type_: _description_
         """
-        job_id = (
-            job_or_id.id
-            if isinstance(job_or_id, self.job_class)
-            else job_or_id
-        )
+        job_id = job_or_id.id if isinstance(job_or_id, self.job_class) else job_or_id
 
         if self.get_redis_server_version() >= (6, 0, 6):
             try:
@@ -413,18 +400,8 @@ class Queue:
             end = offset + (length - 1)
         else:
             end = length
-<<<<<<< HEAD
         job_ids = [as_text(job_id) for job_id in self.connection.lrange(self.key, start, end)]
         self.log.debug('Getting jobs for queue %s: %d found.', green(self.name), len(job_ids))
-=======
-        job_ids = [
-            as_text(job_id)
-            for job_id in self.connection.lrange(self.key, start, end)
-        ]
-        self.log.debug(
-            f"Getting jobs for queue {green(self.name)}: {len(job_ids)} found."
-        )
->>>>>>> dd3b196 (refactor: update typing)
         return job_ids
 
     def get_jobs(self, offset: int = 0, length: int = -1) -> List['Job']:
@@ -460,18 +437,14 @@ class Queue:
         """Returns this queue's FailedJobRegistry."""
         from rq.registry import FailedJobRegistry
 
-        return FailedJobRegistry(
-            queue=self, job_class=self.job_class, serializer=self.serializer
-        )
+        return FailedJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def started_job_registry(self) -> 'StartedJobRegistry':
         """Returns this queue's StartedJobRegistry."""
         from rq.registry import StartedJobRegistry
 
-        return StartedJobRegistry(
-            queue=self, job_class=self.job_class, serializer=self.serializer
-        )
+        return StartedJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def finished_job_registry(self) -> 'FinishedJobRegistry':
@@ -479,36 +452,28 @@ class Queue:
         from rq.registry import FinishedJobRegistry
 
         # TODO: Why was job_class only ommited here before?  Was it intentional?
-        return FinishedJobRegistry(
-            queue=self, job_class=self.job_class, serializer=self.serializer
-        )
+        return FinishedJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def deferred_job_registry(self) -> 'DeferredJobRegistry':
         """Returns this queue's DeferredJobRegistry."""
         from rq.registry import DeferredJobRegistry
 
-        return DeferredJobRegistry(
-            queue=self, job_class=self.job_class, serializer=self.serializer
-        )
+        return DeferredJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def scheduled_job_registry(self) -> 'ScheduledJobRegistry':
         """Returns this queue's ScheduledJobRegistry."""
         from rq.registry import ScheduledJobRegistry
 
-        return ScheduledJobRegistry(
-            queue=self, job_class=self.job_class, serializer=self.serializer
-        )
+        return ScheduledJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def canceled_job_registry(self) -> 'CanceledJobRegistry':
         """Returns this queue's CanceledJobRegistry."""
         from rq.registry import CanceledJobRegistry
 
-        return CanceledJobRegistry(
-            queue=self, job_class=self.job_class, serializer=self.serializer
-        )
+        return CanceledJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     def remove(
         self,
@@ -534,9 +499,7 @@ class Queue:
         """Removes all "dead" jobs from the queue by cycling through it,
         while guaranteeing FIFO semantics.
         """
-        COMPACT_QUEUE = '{0}_compact:{1}'.format(
-            self.redis_queue_namespace_prefix, uuid.uuid4()
-        )  # noqa
+        COMPACT_QUEUE = '{0}_compact:{1}'.format(self.redis_queue_namespace_prefix, uuid.uuid4())  # noqa
 
         self.connection.rename(self.key, COMPACT_QUEUE)  # type: ignore
         while True:
@@ -622,9 +585,7 @@ class Queue:
         if timeout is None:
             timeout = self._default_timeout
         elif timeout == 0:
-            raise ValueError(
-                '0 timeout is not allowed. Use -1 for infinite timeout'
-            )
+            raise ValueError('0 timeout is not allowed. Use -1 for infinite timeout')
 
         result_ttl = parse_timeout(result_ttl)
         failure_ttl = parse_timeout(failure_ttl)
@@ -660,9 +621,7 @@ class Queue:
 
         return job
 
-    def setup_dependencies(
-        self, job: 'Job', pipeline: Optional['Pipeline'] = None
-    ) -> 'Job':
+    def setup_dependencies(self, job: 'Job', pipeline: Optional['Pipeline'] = None) -> 'Job':
         """If a _dependent_ job depends on any unfinished job, register all the
         _dependent_ job's dependencies instead of enqueueing it.
 
@@ -680,11 +639,7 @@ class Queue:
         """
         if len(job._dependency_ids) > 0:
             orig_status = job.get_status(refresh=False)
-            pipe = (
-                pipeline
-                if pipeline is not None
-                else self.connection.pipeline()
-            )
+            pipe = pipeline if pipeline is not None else self.connection.pipeline()
             while True:
                 try:
                     # Also calling watch even if caller
@@ -692,9 +647,7 @@ class Queue:
                     # is called from within this method.
                     pipe.watch(job.dependencies_key)
 
-                    dependencies = job.fetch_dependencies(
-                        watch=True, pipeline=pipe
-                    )
+                    dependencies = job.fetch_dependencies(watch=True, pipeline=pipe)
 
                     pipe.multi()
 
@@ -961,7 +914,7 @@ class Queue:
     def parse_args(
         cls, f: 'FunctionReferenceType', *args: Any, **kwargs: Any
     ) -> Tuple[
-        'FunctionReferenceType',   # f
+        'FunctionReferenceType',  # f
         Optional[int],  # timeout,
         Optional[str],  # description
         Optional[int],  # result_ttl
@@ -1013,9 +966,7 @@ class Queue:
         pipeline = kwargs.pop('pipeline', None)
 
         if 'args' in kwargs or 'kwargs' in kwargs:
-            assert (
-                args == ()
-            ), 'Extra positional arguments cannot be used when using explicit args and kwargs'  # noqa
+            assert args == (), 'Extra positional arguments cannot be used when using explicit args and kwargs'  # noqa
             args = kwargs.pop('args', None)
             kwargs = kwargs.pop('kwargs', None)
 
@@ -1039,9 +990,7 @@ class Queue:
             kwargs,
         )
 
-    def enqueue(
-        self, f: 'FunctionReferenceType', *args: Any, **kwargs: Any
-    ) -> 'Job':
+    def enqueue(self, f: 'FunctionReferenceType', *args: Any, **kwargs: Any) -> 'Job':
         """Creates a job to represent the delayed function call and enqueues it.
         Receives the same parameters accepted by the `enqueue_call` method.
 
@@ -1190,9 +1139,7 @@ class Queue:
         Returns:
             job (Job): The enqueued Job
         """
-        return self.enqueue_at(
-            datetime.now(timezone.utc) + time_delta, func, *args, **kwargs
-        )
+        return self.enqueue_at(datetime.now(timezone.utc) + time_delta, func, *args, **kwargs)
 
     def enqueue_job(self, job: 'Job', pipeline: Optional['Pipeline'] = None, at_front: bool = False) -> Job:
         """Enqueues a job for delayed execution checking dependencies.
@@ -1268,9 +1215,7 @@ class Queue:
         except:  # noqa
             with self.connection.pipeline() as pipeline:
                 job.set_status(JobStatus.FAILED, pipeline=pipeline)
-                exc_string = ''.join(
-                    traceback.format_exception(*sys.exc_info())
-                )
+                exc_string = ''.join(traceback.format_exception(*sys.exc_info()))
                 job._handle_failure(exc_string, pipeline)
                 pipeline.execute()
 
@@ -1284,7 +1229,7 @@ class Queue:
 
     def enqueue_dependents(
         self, job: 'Job', pipeline: Optional['Pipeline'] = None, exclude_job_id: Optional[str] = None
-    )-> None:
+    ) -> None:
         """Enqueues all jobs in the given job's dependents set and clears it.
 
         When called without a pipeline, this method uses WATCH/MULTI/EXEC.
@@ -1308,9 +1253,7 @@ class Queue:
                 if pipeline is None:
                     pipe.watch(dependents_key)
 
-                dependent_job_ids = {
-                    as_text(_id) for _id in pipe.smembers(dependents_key)
-                }
+                dependent_job_ids = {as_text(_id) for _id in pipe.smembers(dependents_key)}
 
                 # There's no dependents
                 if not dependent_job_ids:

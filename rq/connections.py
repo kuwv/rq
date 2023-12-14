@@ -114,18 +114,14 @@ def resolve_connection(connection: Optional['Redis'] = None) -> 'Redis':
 
     connection = get_current_connection()
     if connection is None:
-        raise NoRedisConnectionException(
-            'Could not resolve a Redis connection'
-        )
+        raise NoRedisConnectionException('Could not resolve a Redis connection')
     return connection
 
 
 def parse_connection(
     connection: Redis,
 ) -> Tuple[Type[Redis], Type[RedisConnection], dict]:
-    connection_pool_kwargs = (
-        connection.connection_pool.connection_kwargs.copy()
-    )
+    connection_pool_kwargs = connection.connection_pool.connection_kwargs.copy()
     connection_pool_class = connection.connection_pool.connection_class
 
     return connection.__class__, connection_pool_class, connection_pool_kwargs

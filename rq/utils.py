@@ -332,7 +332,7 @@ def split_list(a_list: List[Any], segment_size: int) -> Generator[List[Any], Non
         list: The splitted listed
     """
     for i in range(0, len(a_list), segment_size):
-        yield a_list[i: i + segment_size]
+        yield a_list[i : i + segment_size]
 
 
 def truncate_long_string(data: str, max_length: Optional[int] = None) -> str:

@@ -77,9 +77,7 @@ class job:  # noqa
                 to None.
         """
         self.queue = queue
-        self.queue_class = backend_class(
-            self, 'queue_class', override=queue_class
-        )
+        self.queue_class = backend_class(self, 'queue_class', override=queue_class)
         self.connection = connection
         self.timeout = timeout
         self.result_ttl = result_ttl
@@ -98,9 +96,7 @@ class job:  # noqa
         @wraps(f)
         def delay(*args: Any, **kwargs: Any) -> 'Job':
             if isinstance(self.queue, str):
-                queue = self.queue_class(
-                    name=self.queue, connection=self.connection
-                )
+                queue = self.queue_class(name=self.queue, connection=self.connection)
             else:
                 queue = self.queue
 

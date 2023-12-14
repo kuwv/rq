@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 from typing import TYPE_CHECKING, Optional, Set
-=======
-from typing import Optional, TYPE_CHECKING, Set
->>>>>>> dd3b196 (refactor: update typing)
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -20,11 +16,7 @@ REDIS_WORKER_KEYS = 'rq:workers'
 MAX_KEYS = 1000
 
 
-<<<<<<< HEAD
-def register(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None):
-=======
-def register(worker: 'Worker', pipeline: Optional['Pipeline'] = None) -> None:
->>>>>>> dd3b196 (refactor: update typing)
+def register(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None) -> None:
     """
     Store worker key in Redis so we can easily discover active workers.
 
@@ -39,11 +31,7 @@ def register(worker: 'Worker', pipeline: Optional['Pipeline'] = None) -> None:
         connection.sadd(redis_key, worker.key)
 
 
-<<<<<<< HEAD
-def unregister(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None):
-=======
-def unregister(worker: 'Worker', pipeline: Optional['Pipeline'] = None) -> None:
->>>>>>> dd3b196 (refactor: update typing)
+def unregister(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None) -> None:
     """Remove Worker key from Redis
 
     Args:

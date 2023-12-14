@@ -83,9 +83,7 @@ class RQScheduler:
         if self._connection:
             return self._connection
         self._connection = self._connection_class(
-            connection_pool=ConnectionPool(
-                connection_class=self._pool_class, **self._pool_kwargs
-            )
+            connection_pool=ConnectionPool(connection_class=self._pool_class, **self._pool_kwargs)
         )
         return self._connection
 
@@ -104,21 +102,15 @@ class RQScheduler:
             return False
         if not self.lock_acquisition_time:
             return True
-        return (
-            datetime.now() - self.lock_acquisition_time
-        ).total_seconds() > DEFAULT_SCHEDULER_FALLBACK_PERIOD
+        return (datetime.now() - self.lock_acquisition_time).total_seconds() > DEFAULT_SCHEDULER_FALLBACK_PERIOD
 
     def acquire_locks(self, auto_start: bool = False) -> Set[str]:
         """Returns names of queue it successfully acquires lock on"""
         successful_locks = set()
         pid = os.getpid()
-        self.log.debug(
-            'Trying to acquire locks for %s', ', '.join(self._queue_names)
-        )
+        self.log.debug('Trying to acquire locks for %s', ', '.join(self._queue_names))
         for name in self._queue_names:
-            if self.connection.set(
-                self.get_locking_key(name), pid, nx=True, ex=self.interval + 60
-            ):
+            if self.connection.set(self.get_locking_key(name), pid, nx=True, ex=self.interval + 60):
                 successful_locks.add(name)
 
         # Always reset _scheduled_job_registries when acquiring locks
@@ -134,9 +126,7 @@ class RQScheduler:
 
         return successful_locks
 
-    def prepare_registries(
-        self, queue_names: Optional[Iterable[str]] = None
-    ) -> None:
+    def prepare_registries(self, queue_names: Optional[Iterable[str]] = None) -> None:
         """Prepare scheduled job registries for use"""
         self._scheduled_job_registries = []
         names = queue_names if queue_names else self._acquired_locks
@@ -200,17 +190,13 @@ class RQScheduler:
         signal.signal(signal.SIGINT, self.request_stop)
         signal.signal(signal.SIGTERM, self.request_stop)
 
-    def request_stop(
-        self, signum: Optional[int] = None, frame: Optional[FrameType] = None
-    ) -> None:
+    def request_stop(self, signum: Optional[int] = None, frame: Optional[FrameType] = None) -> None:
         """Toggle self._stop_requested that's checked on every loop"""
         self._stop_requested = True
 
     def heartbeat(self) -> None:
         """Updates the TTL on scheduler keys and the locks"""
-        self.log.debug(
-            'Scheduler sending heartbeat to %s', ', '.join(self.acquired_locks)
-        )
+        self.log.debug('Scheduler sending heartbeat to %s', ', '.join(self.acquired_locks))
         if len(self._acquired_locks) > 1:
             with self.connection.pipeline() as pipeline:
                 for name in self._acquired_locks:
